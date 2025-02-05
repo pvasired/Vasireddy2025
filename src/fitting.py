@@ -19,15 +19,8 @@ def negLL_hotspot(params, *args):
                    y (np.ndarray) response probabilities, shape N x 1,
                    trials (np.ndarray) number of trials at each amplitude, shape N x 1,
                    verbose (bool) increases verbosity
-                   method (str): regularization method. 'l1', 'l2', and
-                                 'MAP' with multivariate Gaussian prior 
-                                 are supported.
+                   method (str): regularization method. 'l1', 'l2'
                    reg (float): regularization parameter
-                                In the case of MAP, reg consists of 
-                                (regmap, mu, cov)
-                                where regmap is a constant scalar
-                                      mu is the mean vector
-                                      cov is the covariance matrix
 
     Returns:
     negLL (float): negative log likelihood of the data given the 
@@ -57,10 +50,6 @@ def negLL_hotspot(params, *args):
         elif method == 'l2':
             # penalty term according to l2 regularization
             penalty = reg/2*np.linalg.norm(w.flatten())**2
-        elif method == 'MAP':
-            regmap, mu, cov = reg
-            # penalty term according to MAP with Gaussian prior
-            penalty = regmap * 0.5 * (params - mu) @ np.linalg.inv(cov) @ (params - mu)
 
     if verbose:
         print(NLL, penalty)
@@ -104,14 +93,7 @@ def fit_surface_earlystop(X_expt, probs, T, w_inits_,
                     hotspots. This list should be generated externally.
     R2_thresh (float): Threshold used for determining when to stop adding hotspots
     test_size (float): Size of the test set for early stopping
-    reg_method (string): Regularization method. 'l2', 'l1', and 'MAP' with multivariate
-                         Gaussian prior are supported.
-    reg (float): regularization parameter
-                                In the case of MAP, reg consists of 
-                                (regmap, mu, cov)
-                                where regmap is a constant scalar
-                                      mu is the mean vector
-                                      cov is the covariance matrix
+    reg_method (string): Regularization method. 'l2', 'l1'
     slope_bound (float): Bound on the slope of the weights
     zero_prob (float): Value for what the probability should be forced to be below
                        at an amplitude of 0-vector
@@ -147,22 +129,14 @@ def fit_surface_earlystop(X_expt, probs, T, w_inits_,
     test_R2s = np.zeros(len(w_inits))
     opts = []
     for i in range(len(w_inits)):
-        if reg_method == 'MAP':
-            opt = get_w(w_inits[i], X_train, y_train, T_train, zero_prob=zero_prob,
-                                        method=method, 
-                                        reg_method=reg_method,
-                                        reg=(reg[0], reg[1][i][0], reg[1][i][1]),
-                                        verbose=opt_verbose, 
-                                        slope_bound=slope_bound)
-        else:
-            opt = get_w(w_inits[i], X_train, y_train, T_train,
-                                                        zero_prob=zero_prob, 
-                                                        method=method, 
-                                                        reg_method=reg_method, 
-                                                        reg=reg, 
-                                                        verbose=opt_verbose,
-                                                        slope_bound=slope_bound)
-        test_fun = negLL_hotspot(opt[0], X_test, y_test, T_test, opt_verbose, reg_method, reg[0])
+        opt = get_w(w_inits[i], X_train, y_train, T_train,
+                                                    zero_prob=zero_prob, 
+                                                    method=method, 
+                                                    reg_method=reg_method, 
+                                                    reg=reg, 
+                                                    verbose=opt_verbose,
+                                                    slope_bound=slope_bound)
+        test_fun = negLL_hotspot(opt[0], X_test, y_test, T_test, opt_verbose, reg_method, reg)
 
         # Compute the negative log likelihood of the null model which only
         # includes an intercept
@@ -170,7 +144,7 @@ def fit_surface_earlystop(X_expt, probs, T, w_inits_,
         beta_null_test = np.log(ybar_test / (1 - ybar_test))
         null_weights_test = np.concatenate((np.array([beta_null_test]), 
                                              np.zeros(X_expt.shape[-1])))
-        nll_null_test = negLL_hotspot(null_weights_test, X_test, y_test, T_test, False, reg_method, reg[0])
+        nll_null_test = negLL_hotspot(null_weights_test, X_test, y_test, T_test, False, reg_method, reg)
 
         test_R2 = 1 - test_fun / nll_null_test
         if verbose:
@@ -200,14 +174,8 @@ def get_w(w_init, X, y, T, zero_prob=0.01, method='L-BFGS-B',
     zero_prob (float): The forced maximum probability at 0-vector
     method (string): Optimization method according to constrained optimization
                      methods available in scipy.optimize.minimize
-    reg_method (string): Regularization method, 'l2', 'l1', and 'MAP' with multivariate
-                            Gaussian prior are supported.
+    reg_method (string): Regularization method, 'l2', 'l1'
     reg (float): regularization parameter
-                            In the case of MAP, reg consists of 
-                            (regmap, mu, cov)
-                            where regmap is a constant scalar
-                                  mu is the mean vector
-                                  cov is the covariance matrix
     slope_bound (float): Bound on the slope of the weights
     bias_bound (float): Bound on the bias of the weights
     verbose (bool): Increases verbosity
